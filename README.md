@@ -7,7 +7,7 @@ nightingale deployment
 # 下载仓库
 
 ```bash
-git clone ssh://git@139.196.33.23:31002/it/nightingale.git
+git clone git@github.com:kuluce/deployN9e.git
 ```
 
 # 服务端口配置
