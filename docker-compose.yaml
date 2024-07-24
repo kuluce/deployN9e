@@ -1,0 +1,105 @@
+version: "1.0"
+services:
+  db:
+    image: mysql:8.0.31
+    container_name: n9e_db
+    hostname: db
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: n9e_v6
+      MYSQL_USER: n9e
+      MYSQL_PASSWORD: n9e
+    ports:
+      - ${MYSQL_EXTERNAL_PORT}:3306
+    volumes:
+      - ./mysql/db/:/var/lib/mysql/
+      - ./mysql/conf/:/etc/mysql/conf.d/
+      - ./mysql/init/:/docker-entrypoint-initdb.d/
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci --explicit_defaults_for_timestamp=true --lower_case_table_names=1
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+
+  redis:
+    image: redis:6.2
+    container_name: n9e_redis
+    hostname: redis
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - ./redis/data:/data
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 64m
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.79.12
+    container_name: n9e_victoriametrics
+    hostname: victoriametrics
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./victoriametrics/data:/victoria-metrics-data
+      - /etc/localtime:/etc/localtime:ro
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8428"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 5s
+    ports:
+      - "${VICTORIAMETRICS_PORT}:8428"
+    command:
+      - "--loggerTimezone=Asia/Shanghai"
+
+  nightingale:
+    image: flashcatcloud/nightingale:7.0.0-beta.14.3
+    container_name: n9e_nightingale
+    hostname: nightingale
+    restart: always
+    environment:
+      GIN_MODE: release
+      TZ: Asia/Shanghai
+      WAIT_HOSTS: db:3306, redis:6379
+    volumes:
+      - ./nightingale/etc:/app/etc
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:17000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    ports:
+      - "${NIGHTINGALE_PORT}:17000" # n9e port
+      - "${NIGHTINGALE_IBEX_PORT}:20090" # ibex port
+    depends_on:
+      - db
+      - redis
+      - victoriametrics
+    command: >
+      sh -c "/app/n9e"
